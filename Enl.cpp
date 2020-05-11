@@ -117,11 +117,110 @@ int expose, saveexp;
 
 class Remote : public Task {
     IrReceiver *receiver;
+    int selected;
+    int contrast;
   public:
     Remote();
     bool runable(unsigned long);
     void run();
+    void rotatemode();
+    void modeup();
+    void modedown();
+    void dispmode();
 } *irrem;
+
+void
+Remote::dispmode()
+{
+  char d[2];
+  switch(selected) {
+    case 0:
+      d[0] = 'C';
+      d[1] = '0'+contrast;
+      break;
+    case 1:
+      d[0] = 'R';
+      d[1] = '0'+lastred;
+      break;
+    case 2:
+      d[0] = 'G';
+      d[1] = '0'+lastgreen;
+      break;
+    case 3:
+      d[0] = 'B';
+      d[1] = '0'+lastblue;
+      break;
+    case 4:
+      d[0] = 'V';
+      d[1] = '0'+lastviolet;
+      break;
+  }
+  disp.show(d);
+}
+
+void
+Remote::rotatemode()
+{
+  if (++selected == 5)
+    selected = 0;
+  dispmode();
+}
+
+void
+Remote::modeup()
+{
+  switch(selected) {
+    case 0:
+      if (++contrast == 10)
+        contrast = 0;
+      break;
+    case 1:
+      if (++lastred == 10)
+        lastred = 0;
+      break;
+    case 2:
+      if (++lastgreen == 10)
+        lastgreen = 0;
+      break;
+    case 3:
+      if (++lastblue == 10)
+        lastblue = 0;
+      break;
+    case 4:
+      if (++lastviolet == 10)
+        lastviolet = 0;
+      break;
+  }
+  dispmode();
+}
+
+void
+Remote::modedown()
+{
+  switch(selected) {
+    case 0:
+      if (contrast-- == 0)
+        contrast = 9;
+      break;
+    case 1:
+      if (lastred-- == 0)
+        lastred = 9;
+      break;
+    case 2:
+      if (lastgreen-- == 0)
+        lastgreen = 9;
+      break;
+    case 3:
+      if (lastblue-- == 0)
+        lastblue = 9;
+      break;
+    case 4:
+      if (lastviolet-- == 0)
+        lastviolet = 9;
+      break;
+  }
+  dispmode();
+}
 
 void setup() {
   // put your setup code here, to run once:
@@ -138,8 +237,8 @@ void setup() {
   lastred = lastgreen = lastblue = lastviolet = 0;
 
   irrem = new Remote();
-  disp.show("01");  // version 0.1
-  disp.setd(3, 1);  // decimal point
+  disp.show("02");  // version 0.1
+  disp.setd(3, 2);  // decimal point
   pinMode(LED_BUILTIN, OUTPUT);
 }
 
@@ -177,6 +276,8 @@ Exposure::run()
 Remote::Remote()
 {
   receiver = IrReceiverSampler::newIrReceiverSampler(200, 8);
+  selected = 0;
+  contrast = 0;
 
   receiver->enable();
 }
@@ -218,7 +319,7 @@ Remote::run()
             violet.set(lastviolet = 9);
             showexp();
             break;
-          case 5:
+          case 11:
             red.set(0);
             green.set(0);
             blue.set(0);
@@ -226,12 +327,12 @@ Remote::run()
             lastred = lastgreen = lastblue = lastviolet = 0;
             disp.show("##");
             break;
-          case 6:
+          case 19:
             fixed = !fixed;
             if (!fixed)
               disp.cleardisp();
             break;
-          case 7:
+          case 84:
             fixed = true;
             if (exptim)
               delete exptim;
@@ -241,14 +342,14 @@ Remote::run()
             blue.set(lastblue);
             violet.set(lastviolet);
             break;
-          case 8:
+          case 12:
             red.set(0);
             green.set(0);
             blue.set(0);
             violet.set(0);
             showexp();
             break;
-          case 9:
+          case 29:
             red.set(0);
             green.set(9);
             blue.set(9);
@@ -278,6 +379,15 @@ Remote::run()
             // fall through
           case 0:
             disp.show(saveexp);
+            break;
+          case 20:
+            rotatemode();
+            break;
+          case 30:
+            modedown();
+            break;
+          case 31:
+            modeup();
             break;
         }
       }
