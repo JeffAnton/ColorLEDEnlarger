@@ -6,7 +6,7 @@
 
 /*
  * Color LED Enlarger
- * Copyright 2020 Jeffrey Anton
+ * Copyright 2022 Jeffrey Anton
  * 
  * See LICENSE file
  */
@@ -119,6 +119,8 @@ class Remote : public Task {
     IrReceiver *receiver;
     int selected;
     int contrast;
+    int lastbutton;
+    int whitefocus;
   public:
     Remote();
     bool runable(unsigned long);
@@ -237,7 +239,7 @@ void setup() {
   lastred = lastgreen = lastblue = lastviolet = 0;
 
   irrem = new Remote();
-  disp.show("02");  // version 0.1
+  disp.show("03");  // version 0.3
   disp.setd(3, 2);  // decimal point
   pinMode(LED_BUILTIN, OUTPUT);
 }
@@ -278,6 +280,8 @@ Remote::Remote()
   receiver = IrReceiverSampler::newIrReceiverSampler(200, 8);
   selected = 0;
   contrast = 0;
+  lastbutton = 0;
+  whitefocus = 0;
 
   receiver->enable();
 }
@@ -297,29 +301,36 @@ showexp()
 void
 Remote::run()
 {
+    int button;
+
     receiver->disable();
     if (!receiver->isEmpty()) {
       Nec1Decoder decoder(*receiver);
       if (decoder.isValid() && !decoder.isDitto() && decoder.getD() == 53) {
         // got a key - do something
-        switch (decoder.getF()) {
+        switch (button = decoder.getF()) {
           case 1:
+            // all RED
             red.set(lastred = 9);
             showexp();
             break;
           case 2:
+            // all GREEN
             green.set(lastgreen = 9);
             showexp();
             break;
           case 3:
+            // all BLUE
             blue.set(lastblue = 9);
             showexp();
             break;
           case 4:
+            // all VIOLET
             violet.set(lastviolet = 9);
             showexp();
             break;
           case 11:
+            // all OFF
             red.set(0);
             green.set(0);
             blue.set(0);
@@ -328,11 +339,13 @@ Remote::run()
             disp.show("##");
             break;
           case 19:
+            // DEMO?
             fixed = !fixed;
             if (!fixed)
               disp.cleardisp();
             break;
           case 84:
+            // do EXPOSURE
             fixed = true;
             if (exptim)
               delete exptim;
@@ -343,6 +356,7 @@ Remote::run()
             violet.set(lastviolet);
             break;
           case 12:
+            // lights OFF
             red.set(0);
             green.set(0);
             blue.set(0);
@@ -350,46 +364,52 @@ Remote::run()
             showexp();
             break;
           case 29:
-            red.set(0);
+            // FOCUS light
+            if (lastbutton == 29)
+              whitefocus ^= 1;
+            red.set(whitefocus ? 9 : 0);
             green.set(9);
             blue.set(9);
             violet.set(0);
             disp.setd(3, 1);
             break;
-          case 14: // down
+          case 14: // time down by HALF
             saveexp /= 2;
             if (saveexp <= 0)
               saveexp = 1;
             disp.show(saveexp);
             break;
           case 72:
+            // down 1 SECOND
             if (saveexp > 1)
               --saveexp;
             disp.show(saveexp);
             break;
           case 73:
+            // up 1 SECOND
             if (saveexp < 99)
               ++saveexp;
             disp.show(saveexp);
             break;
-          case 15: // up
+          case 15: // time up by DOUBLE
             saveexp *= 2;
             if (saveexp > 99)
               saveexp = 99;
             // fall through
-          case 0:
+          case 0: // show current TIME
             disp.show(saveexp);
             break;
-          case 20:
+          case 20: // change fine color mode
             rotatemode();
             break;
-          case 30:
+          case 30: // color value down
             modedown();
             break;
-          case 31:
+          case 31: // color value up
             modeup();
             break;
         }
+        lastbutton = button;
       }
     }
     receiver->enable();
