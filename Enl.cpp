@@ -223,7 +223,7 @@ void setup() {
   lastred = lastgreen = lastblue = lastviolet = 0;
 
   irrem = new Remote();
-  disp.show("05");  // version 0.5
+  disp.show("10");  // version 1.0
   disp.setd(3, 2);  // decimal point
   pinMode(LED_BUILTIN, OUTPUT);
 }
