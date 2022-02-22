@@ -3,6 +3,7 @@
 #include <Nec1Decoder.h>
 #include "task.h"
 #include "display57.h"
+#include "preset.h"
 
 /*
  * Color LED Enlarger
@@ -13,6 +14,10 @@
 
 static bool fixed;
 static Display57 disp;
+
+static byte cross[] = { 0, 021, 012, 04, 012, 021, 0 };
+static byte upptr[] = { 0, 04, 010, 037, 010, 04, 0 };
+static byte downptr[] = { 0, 04, 02, 037, 02, 04, 0 };
 
 static byte
 bits(int v)
@@ -40,7 +45,7 @@ bits(int v)
 static void
 setgraph(int a, int b, int c, int d)
 {
-  disp.cleardisp();
+  disp.clear();
   disp.setd(0, bits(a));
   disp.setd(2, bits(b));
   disp.setd(4, bits(c));
@@ -54,14 +59,17 @@ public:
   void init(int);
   void set(int);
   void run();
-  int get() const { return val; }
 
 private:
   int pin;
   int val;
   bool down;
   int column;
+  static int scale[];
 };
+
+// one stop is a three, i.e. 1 is a third of a stop
+int LedPower::scale[] = { 0, 0x2a, 0x35, 0x40, 0x55, 0x6a, 0x80, 0xaa, 0xb5 };
 
 void
 LedPower::init(int v = 0)
@@ -80,7 +88,7 @@ LedPower::set(int i) {
       digitalWrite(pin, HIGH);
       down = true;
     } else {
-      analogWrite(pin, 1 << (i - 1));
+      analogWrite(pin, scale[i]);
     }
 }
 
@@ -90,12 +98,8 @@ LedPower::run() {
       return;
     if (down) {
       set(val-1);
-      if (val == 0)
-        down = false;
     } else {
       set(val+1);
-      if (val == 9)
-        down = true;
     }
     disp.setd(column, bits(val));
 }
@@ -105,14 +109,14 @@ LedPower blue(9, 10, 4);
 LedPower red(10, 15, 0);
 LedPower green(3, 25, 2);
 LedPower violet(5, 35, 6);
-#elif defined(ARDUINO_AVR_DUEMILANOVE)
+#else // classic 328P, 128 AVR processors
 LedPower blue(9, 10, 4);
 LedPower red(10, 15, 0);
 LedPower green(11, 25, 2);
 LedPower violet(6, 35, 6);
 #endif
 
-int lastred, lastgreen, lastblue, lastviolet;
+byte lastred, lastgreen, lastblue, lastviolet;
 int expose, saveexp;
 
 class Remote : public Task {
@@ -121,6 +125,7 @@ class Remote : public Task {
     int contrast;
     int lastbutton;
     int whitefocus;
+    PresetMgr preset;
   public:
     Remote();
     bool runable(unsigned long);
@@ -136,10 +141,6 @@ Remote::dispmode()
 {
   char d[2];
   switch(selected) {
-    case 0:
-      d[0] = 'C';
-      d[1] = '0'+contrast;
-      break;
     case 1:
       d[0] = 'R';
       d[1] = '0'+lastred;
@@ -164,7 +165,7 @@ void
 Remote::rotatemode()
 {
   if (++selected == 5)
-    selected = 0;
+    selected = 1;
   dispmode();
 }
 
@@ -172,10 +173,6 @@ void
 Remote::modeup()
 {
   switch(selected) {
-    case 0:
-      if (++contrast == 10)
-        contrast = 0;
-      break;
     case 1:
       if (++lastred == 10)
         lastred = 0;
@@ -200,10 +197,6 @@ void
 Remote::modedown()
 {
   switch(selected) {
-    case 0:
-      if (contrast-- == 0)
-        contrast = 9;
-      break;
     case 1:
       if (lastred-- == 0)
         lastred = 9;
@@ -225,8 +218,6 @@ Remote::modedown()
 }
 
 void setup() {
-  // put your setup code here, to run once:
-
   fixed = true;
   
   red.init();
@@ -239,7 +230,7 @@ void setup() {
   lastred = lastgreen = lastblue = lastviolet = 0;
 
   irrem = new Remote();
-  disp.show("03");  // version 0.3
+  disp.show("04");  // version 0.4
   disp.setd(3, 2);  // decimal point
   pinMode(LED_BUILTIN, OUTPUT);
 }
@@ -278,9 +269,9 @@ Exposure::run()
 Remote::Remote()
 {
   receiver = IrReceiverSampler::newIrReceiverSampler(200, 8);
-  selected = 0;
+  selected = 1;
   contrast = 0;
-  lastbutton = 0;
+  lastbutton = -1;
   whitefocus = 0;
 
   receiver->enable();
@@ -336,13 +327,13 @@ Remote::run()
             blue.set(0);
             violet.set(0);
             lastred = lastgreen = lastblue = lastviolet = 0;
-            disp.show("##");
+            disp.setbits(cross);
             break;
           case 19:
             // DEMO?
             fixed = !fixed;
             if (!fixed)
-              disp.cleardisp();
+              disp.clear();
             break;
           case 84:
             // do EXPOSURE
@@ -408,6 +399,30 @@ Remote::run()
           case 31: // color value up
             modeup();
             break;
+          case 0x45:  // set to contrast
+            disp.show("C");
+            preset.Get( contrast, lastred, lastgreen, lastblue, lastviolet );
+            break;
+          case 0x41:  // contrast down
+            disp.setbits(downptr);
+            if (contrast-- == 0)
+              contrast = preset.Count() - 1;
+            preset.Get( contrast, lastred, lastgreen, lastblue, lastviolet );
+            break;
+          case 0x40:  // contrast up
+            disp.setbits(upptr);
+            if (++contrast >= preset.Count())
+              contrast = 0;
+            preset.Get( contrast, lastred, lastgreen, lastblue, lastviolet );
+            break;
+          case 0x58:  // store contrast setting
+            disp.inverse();
+            preset.Set( contrast, lastred, lastgreen, lastblue, lastviolet );
+            break;
+          case 0x15:  // font demo?
+          default:
+            if (button == lastbutton)
+              disp.showhex(button);
         }
         lastbutton = button;
       }

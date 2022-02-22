@@ -4,7 +4,7 @@
 /*
  * Multiple 5x7 display
  * 
- * Copyright 2020 Jeffrey Anton
+ * Copyright 2022 Jeffrey Anton
  * See LICENSE file
  */
 
@@ -14,9 +14,12 @@ class Display57 : public TimedTask {
     void init();
     void show(const char *);
     void show(unsigned int v);
+    void showhex(unsigned int v);
     void fillchar(char, byte *);
-    void cleardisp();
+    void clear();
     void setd(unsigned int i, byte b);
+    void setbits(byte *b);
+    void inverse();
     void run();
   private:
     void setbits(byte);

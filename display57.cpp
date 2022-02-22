@@ -6,7 +6,7 @@
 /*
  * Multiplex display 5 x 7
  * 
- * Copyright 2020 Jeffrey Anton
+ * Copyright 2022 Jeffrey Anton
  * See LICENSE file
  * 
  * Pin arrangement for Arduino Nano Every
@@ -59,12 +59,36 @@ Display57::show(unsigned int v)
     if (v < 10) {
       s[0] = v + '0';
       s[1] = '\0';
-    }
-    else if (v < 100) {
+    } else if (v < 100) {
       s[0] = v / 10 + '0';
       s[1] = v % 10 + '0';
       s[2] = '\0';
+    } else {
+      s[0] = '?';
+      s[1] = '\0';
     }
+    
+    show(s);
+}
+
+void
+Display57::showhex(unsigned int v)
+{
+    char s[3];
+
+    if (v < 0x100) {
+      s[0] = v / 16 + '0';
+      if (s[0] > '9')
+        s[0] += 'a' - '9' - 1;
+      s[1] = v % 16 + '0';
+      if (s[1] > '9')
+        s[1] += 'a' - '9' - 1;
+      s[2] = '\0';
+    } else {
+      s[0] = '?';
+      s[1] = '\0';
+    }
+
     show(s);
 }
 
@@ -79,7 +103,7 @@ Display57::run() {
 
 void
 Display57::show(const char *s) {
-  cleardisp();
+  clear();
   if (*s) {
     if (s[1]) {
       fillchar(*s, dmem);
@@ -100,7 +124,7 @@ Display57::fillchar(char c, byte *d) {
 }
 
 void
-Display57::cleardisp() {
+Display57::clear() {
   byte *d = dmem;
   *d++ = 0;
   *d++ = 0;
@@ -116,4 +140,30 @@ void
 Display57::setd(unsigned int d, byte b) {
   if (d < 7)
     dmem[d] = b;
+}
+
+void
+Display57::setbits(byte *b) {
+  byte *d = dmem;
+  *d++ = *b++;
+  *d++ = *b++;
+  *d++ = *b++;
+  *d++ = *b++;
+  *d++ = *b++;
+  *d++ = *b++;
+  *d = *b;
+  disp = dmem;  
+}
+
+void
+Display57::inverse() {
+  byte *d = dmem;
+  *d++ ^= 037;
+  *d++ ^= 037;
+  *d++ ^= 037;
+  *d++ ^= 037;
+  *d++ ^= 037;
+  *d++ ^= 037;
+  *d ^= 037;
+  disp = dmem;  
 }
