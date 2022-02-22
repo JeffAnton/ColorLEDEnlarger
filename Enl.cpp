@@ -16,40 +16,34 @@ static bool fixed;
 static Display57 disp;
 
 static byte cross[] = { 0, 021, 012, 04, 012, 021, 0 };
-static byte upptr[] = { 0, 04, 010, 037, 010, 04, 0 };
-static byte downptr[] = { 0, 04, 02, 037, 02, 04, 0 };
+//static byte upptr[] = { 0, 04, 010, 037, 010, 04, 0 };
+//static byte downptr[] = { 0, 04, 02, 037, 02, 04, 0 };
+static byte c00[] = { 0x1F,0x11,0x1F, 0, 0x1F,0x11,0x1F };
+static byte c0[] = { 0x1F,0x11,0x1F, 0, 02, 05, 05 };
+static byte c0half[] = { 0x1F,0x11,0x1F, 0, 022, 025, 025 };
+static byte c1[] = { 011, 037, 01, 0, 02, 05, 05 };
+static byte c1half[] = { 011, 037, 01, 0, 022, 025, 025 };
+static byte c2[] = { 0x17, 0x15, 0x1D, 0, 02, 05, 05 };
+static byte c2half[] = { 0x17, 0x15, 0x1D, 0, 022, 025, 025 };
+static byte c3[] = { 0x11,0x15,0x1F, 0, 02, 05, 05 };
+static byte c3half[] = { 0x11,0x15,0x1F, 0, 022, 025, 025 };
+static byte c4[] = { 0x1C,0x04,0x1F, 0, 02, 05, 05 };
+static byte c4half[] = { 0x1C,0x04,0x1F, 0, 022, 025, 025 };
+static byte c5[] = { 0x1D,0x15,0x17, 0, 02, 05, 05 };
 
-static byte
-bits(int v)
-{
-  switch (v) {
-    case 0:
-      return 0;
-    case 1:
-    case 2:
-      return 01;
-    case 3:
-    case 4:
-      return 03;
-    case 5:
-    case 6:
-      return 07;
-    case 7:
-    case 8:
-      return 017;
-    default:
-      return 037;
-  }
-}
+static byte *cbits[] = { c00, c0, c0half, c1, c1half, c2, c2half,
+                        c3, c3half, c4, c4half, c5 };
+
+static byte bits[] = { 0, 1, 1, 3, 3, 7, 7, 017, 017, 037 };
 
 static void
-setgraph(int a, int b, int c, int d)
+setgraph(byte a, byte b, byte c, byte d)
 {
   disp.clear();
-  disp.setd(0, bits(a));
-  disp.setd(2, bits(b));
-  disp.setd(4, bits(c));
-  disp.setd(6, bits(d));
+  disp.setd(0, bits[a]);
+  disp.setd(2, bits[b]);
+  disp.setd(4, bits[c]);
+  disp.setd(6, bits[d]);
 }
 
 class LedPower : public TimedTask {
@@ -61,15 +55,15 @@ public:
   void run();
 
 private:
-  int pin;
-  int val;
+  byte pin;
+  byte val;
   bool down;
-  int column;
-  static int scale[];
+  byte column;
+  static byte scale[];
 };
 
 // one stop is a three, i.e. 1 is a third of a stop
-int LedPower::scale[] = { 0, 0x2a, 0x35, 0x40, 0x55, 0x6a, 0x80, 0xaa, 0xb5 };
+byte LedPower::scale[] = { 0, 0x2a, 0x35, 0x40, 0x55, 0x6a, 0x80, 0xaa, 0xb5 };
 
 void
 LedPower::init(int v = 0)
@@ -96,12 +90,11 @@ void
 LedPower::run() {
     if (fixed)
       return;
-    if (down) {
+    if (down)
       set(val-1);
-    } else {
+    else
       set(val+1);
-    }
-    disp.setd(column, bits(val));
+    disp.setd(column, bits[val]);
 }
 
 #if defined(ARDUINO_AVR_NANO_EVERY) || defined(ARDUINO_ARDUINO_NANO33BLE)
@@ -230,7 +223,7 @@ void setup() {
   lastred = lastgreen = lastblue = lastviolet = 0;
 
   irrem = new Remote();
-  disp.show("04");  // version 0.4
+  disp.show("05");  // version 0.5
   disp.setd(3, 2);  // decimal point
   pinMode(LED_BUILTIN, OUTPUT);
 }
@@ -267,10 +260,11 @@ Exposure::run()
 }
 
 Remote::Remote()
+  : preset(12)
 {
   receiver = IrReceiverSampler::newIrReceiverSampler(200, 8);
-  selected = 1;
-  contrast = 0;
+  selected = 1; // red
+  contrast = 5; // grade 2
   lastbutton = -1;
   whitefocus = 0;
 
@@ -400,24 +394,24 @@ Remote::run()
             modeup();
             break;
           case 0x45:  // set to contrast
-            disp.show("C");
-            preset.Get( contrast, lastred, lastgreen, lastblue, lastviolet );
+            disp.setbits(cbits[contrast]);
+            preset.Get(contrast, lastred, lastgreen, lastblue, lastviolet);
             break;
           case 0x41:  // contrast down
-            disp.setbits(downptr);
             if (contrast-- == 0)
               contrast = preset.Count() - 1;
-            preset.Get( contrast, lastred, lastgreen, lastblue, lastviolet );
+            disp.setbits(cbits[contrast]);
+            preset.Get(contrast, lastred, lastgreen, lastblue, lastviolet);
             break;
           case 0x40:  // contrast up
-            disp.setbits(upptr);
             if (++contrast >= preset.Count())
               contrast = 0;
-            preset.Get( contrast, lastred, lastgreen, lastblue, lastviolet );
+            disp.setbits(cbits[contrast]);
+            preset.Get(contrast, lastred, lastgreen, lastblue, lastviolet);
             break;
           case 0x58:  // store contrast setting
             disp.inverse();
-            preset.Set( contrast, lastred, lastgreen, lastblue, lastviolet );
+            preset.Set(contrast, lastred, lastgreen, lastblue, lastviolet);
             break;
           case 0x15:  // font demo?
           default:
